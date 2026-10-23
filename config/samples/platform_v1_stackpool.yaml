@@ -1,0 +1,19 @@
+# Keeps two Stacks provisioned for CI, never running more than ten at once.
+apiVersion: platform.my.domain/v1
+kind: StackPool
+metadata:
+  labels:
+    app.kubernetes.io/name: stack-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: stackpool-sample
+spec:
+  warm: 2
+  max: 10
+  defaultTTL: 2h
+  maxTTL: 8h
+  template:
+    metadata:
+      labels:
+        team: ci
+    spec:
+      foo: bar

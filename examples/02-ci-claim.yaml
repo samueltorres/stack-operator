@@ -1,0 +1,20 @@
+# What a CI job creates to lease a Stack from the ci-e2e pool.
+#
+# generateName gives every run its own claim, so use `kubectl create`
+# (`kubectl apply` needs a fixed name):
+#
+#   claim=$(kubectl create -f 02-ci-claim.yaml -o name)
+#   kubectl wait --for=condition=Bound "$claim" --timeout=20m
+#   stack=$(kubectl get "$claim" -o jsonpath='{.status.stackName}')
+#
+# Delete the claim when the tests finish; its Stack is torn down right away.
+# If the job crashes, the Stack still goes away once the ttl runs out.
+apiVersion: platform.my.domain/v1
+kind: StackClaim
+metadata:
+  generateName: ci-run-
+  labels:
+    ci/pipeline: checkout-service
+spec:
+  poolName: ci-e2e
+  ttl: 90m

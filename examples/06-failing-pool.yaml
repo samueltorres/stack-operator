@@ -1,0 +1,26 @@
+# A pool whose Stacks always fail to provision, to see the circuit breaker.
+#
+# The simulator honours platform.my.domain/simulate-failure; a real
+# provisioner ignores it. Watch it with:
+#
+#   kubectl get stackpool broken-template -w
+#
+# Each failed Stack is deleted and the pool backs off (30s, 60s, ...). After
+# three failures in a row DEGRADED turns True and provisioning stops. Any
+# template change starts over, for example removing the annotation:
+#
+#   kubectl patch stackpool broken-template --type=json \
+#     -p '[{"op":"remove","path":"/spec/template/metadata/annotations"}]'
+apiVersion: platform.my.domain/v1
+kind: StackPool
+metadata:
+  name: broken-template
+spec:
+  warm: 1
+  max: 3
+  template:
+    metadata:
+      annotations:
+        platform.my.domain/simulate-failure: "true"
+    spec:
+      foo: broken

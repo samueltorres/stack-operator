@@ -1,0 +1,31 @@
+# A pool for a rarely used, expensive flavour of Stack.
+#
+# warm: 0 keeps nothing idle: every claim waits for a fresh Stack to be
+# provisioned, which saves money at the cost of waiting. At most two can
+# exist at once.
+apiVersion: platform.my.domain/v1
+kind: StackPool
+metadata:
+  name: gpu-on-demand
+spec:
+  warm: 0
+  max: 2
+  defaultTTL: 4h
+  maxTTL: 12h
+  template:
+    metadata:
+      labels:
+        team: ml
+        flavour: gpu
+    spec:
+      foo: gpu
+---
+# Asks for 24h but gets 12h, the pool's maxTTL. The claim's TTLClamped
+# condition says so.
+apiVersion: platform.my.domain/v1
+kind: StackClaim
+metadata:
+  name: training-run
+spec:
+  poolName: gpu-on-demand
+  ttl: 24h

@@ -1,0 +1,31 @@
+# Stacks engineers create by hand, outside any pool.
+#
+# This one is torn down at expiresAt. To keep it longer, move expiresAt
+# later:
+#
+#   kubectl patch stack alice-sandbox --type=merge \
+#     -p "{\"spec\":{\"expiresAt\":\"$(date -u -v+3d +%Y-%m-%dT%H:%M:%SZ)\"}}"
+#
+# (macOS date; on Linux use `date -u -d +3days +%Y-%m-%dT%H:%M:%SZ`.)
+#
+# Set a time a few minutes ahead to watch it expire.
+apiVersion: platform.my.domain/v1
+kind: Stack
+metadata:
+  name: alice-sandbox
+  labels:
+    owner: alice
+spec:
+  foo: sandbox
+  expiresAt: "2030-01-01T00:00:00Z"
+---
+# Without expiresAt a Stack lives until someone deletes it, so use this only
+# for long-lived environments.
+apiVersion: platform.my.domain/v1
+kind: Stack
+metadata:
+  name: payments-team-staging
+  labels:
+    owner: payments-team
+spec:
+  foo: staging

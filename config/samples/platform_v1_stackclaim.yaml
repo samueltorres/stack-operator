@@ -1,0 +1,14 @@
+# Leases a Stack from stackpool-sample for an hour. Wait for it with
+#   kubectl wait --for=condition=Bound stackclaim/stackclaim-sample
+# then read the Stack's name from .status.stackName. Delete the claim when
+# done to tear the Stack down early.
+apiVersion: platform.my.domain/v1
+kind: StackClaim
+metadata:
+  labels:
+    app.kubernetes.io/name: stack-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: stackclaim-sample
+spec:
+  poolName: stackpool-sample
+  ttl: 1h

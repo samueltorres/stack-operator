@@ -1,0 +1,6 @@
+## Append samples of your project ##
+resources:
+- platform_v1_stack.yaml
+- platform_v1_stackpool.yaml
+- platform_v1_stackclaim.yaml
+# +kubebuilder:scaffold:manifestskustomizesamples

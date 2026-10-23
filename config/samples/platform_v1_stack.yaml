@@ -1,0 +1,12 @@
+# A Stack created by hand, e.g. by an engineer for their team. Without
+# spec.expiresAt it lives until deleted.
+apiVersion: platform.my.domain/v1
+kind: Stack
+metadata:
+  labels:
+    app.kubernetes.io/name: stack-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: stack-sample
+spec:
+  foo: bar
+  expiresAt: "2030-01-01T00:00:00Z"

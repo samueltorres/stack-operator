@@ -1,0 +1,24 @@
+# A pool for CI end-to-end runs.
+#
+# Three Stacks are kept warm so a CI job usually gets one within seconds.
+# Bursts beyond that are provisioned on demand, up to 15 Stacks in total
+# (warm + provisioning + leased). Each lease lasts 2h unless the claim asks
+# otherwise, and never more than 6h.
+apiVersion: platform.my.domain/v1
+kind: StackPool
+metadata:
+  name: ci-e2e
+spec:
+  warm: 3
+  max: 15
+  defaultTTL: 2h
+  maxTTL: 6h
+  template:
+    metadata:
+      labels:
+        team: platform
+        purpose: ci
+      annotations:
+        cost-center: engineering-ci
+    spec:
+      foo: e2e
