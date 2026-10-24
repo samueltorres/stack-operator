@@ -35,6 +35,12 @@ import (
 )
 
 var _ = Describe("API validation", func() {
+	weekend := func(warm int32) platformv1.WarmSchedule {
+		return platformv1.WarmSchedule{
+			Name: "weekend", Days: []platformv1.Weekday{platformv1.Saturday, platformv1.Sunday}, Warm: warm,
+		}
+	}
+
 	AfterEach(cleanup)
 
 	DescribeTable("accepts the samples",
@@ -93,5 +99,36 @@ var _ = Describe("API validation", func() {
 		Entry("templated claimRef", func(p *platformv1.StackPool) {
 			p.Spec.Template.Spec.ClaimRef = &platformv1.ClaimReference{Name: "c", UID: "u"}
 		}, "cannot be templated"),
+		Entry("warm schedule above max", func(p *platformv1.StackPool) {
+			p.Spec.WarmSchedules = []platformv1.WarmSchedule{weekend(3)}
+		}, "warmSchedules[].warm must not exceed max"),
+		Entry("warm schedule that never opens", func(p *platformv1.StackPool) {
+			s := weekend(0)
+			s.Start, s.End = "08:00", "08:00"
+			p.Spec.WarmSchedules = []platformv1.WarmSchedule{s}
+		}, "start and end must differ"),
+		Entry("warm schedule starting at 24:00", func(p *platformv1.StackPool) {
+			s := weekend(0)
+			s.Start = "24:00"
+			p.Spec.WarmSchedules = []platformv1.WarmSchedule{s}
+		}, "spec.warmSchedules[0].start"),
+		Entry("unknown time zone", func(p *platformv1.StackPool) {
+			p.Spec.TimeZone = new("Mars/Olympus_Mons")
+		}, "timeZone must be a valid IANA time zone"),
+		Entry("local time zone", func(p *platformv1.StackPool) {
+			p.Spec.TimeZone = new("Local")
+		}, "timeZone must be a valid IANA time zone"),
 	)
+
+	It("defaults a warm schedule to whole days", func() {
+		pool := createPool(1, 2, func(p *platformv1.StackPool) {
+			p.Spec.TimeZone = new("Europe/Lisbon")
+			p.Spec.WarmSchedules = []platformv1.WarmSchedule{{
+				Name: "weekend", Days: []platformv1.Weekday{platformv1.Saturday}, Warm: 0,
+			}}
+		})
+		schedule := get(pool.Name, pool).Spec.WarmSchedules[0]
+		Expect(schedule.Start).To(Equal("00:00"))
+		Expect(schedule.End).To(Equal("24:00"))
+	})
 })

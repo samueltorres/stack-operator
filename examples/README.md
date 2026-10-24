@@ -12,6 +12,7 @@ built-in simulator, so everything below works on a throwaway
 | [`04-on-demand-pool.yaml`](04-on-demand-pool.yaml) | A pool with nothing warm, and a claim whose ttl gets clamped |
 | [`05-engineer-stack.yaml`](05-engineer-stack.yaml) | Stacks created by hand, with and without an expiry |
 | [`06-failing-pool.yaml`](06-failing-pool.yaml) | Provisioning backoff and the circuit breaker |
+| [`07-weekend-pool.yaml`](07-weekend-pool.yaml) | Fewer warm Stacks outside working hours |
 
 ## Setup
 
@@ -79,6 +80,15 @@ kubectl apply -f examples/05-engineer-stack.yaml
 kubectl apply -f examples/06-failing-pool.yaml
 kubectl get stackpool broken-template -w
 kubectl describe stackpool broken-template   # conditions and events
+```
+
+**Warm schedules.** `DESIRED` shows the warm target in force, and the
+status says which schedule set it:
+
+```sh
+kubectl apply -f examples/07-weekend-pool.yaml
+kubectl get stackpool ci-office-hours \
+  -o jsonpath='{.status.desiredWarm} {.status.activeWarmSchedule}{"\n"}'
 ```
 
 ## Cleanup

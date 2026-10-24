@@ -1,0 +1,34 @@
+# A CI pool that scales down outside working hours.
+#
+# Five Stacks are kept warm on weekdays. From Friday 20:00 until Monday
+# 07:00, Lisbon time, the pool keeps a single one: unused Stacks are torn
+# down (leased ones are left alone) and the pool fills up again on Monday
+# morning, before anyone starts work. Claims made over the weekend are still
+# served, waiting for provisioning once the warm Stack is taken.
+apiVersion: platform.my.domain/v1
+kind: StackPool
+metadata:
+  name: ci-office-hours
+spec:
+  warm: 5
+  max: 15
+  timeZone: Europe/Lisbon
+  warmSchedules:
+  - name: friday-night
+    days: [Friday]
+    start: "20:00"
+    warm: 1
+  - name: weekend
+    days: [Saturday, Sunday]
+    warm: 1
+  - name: monday-morning
+    days: [Monday]
+    end: "07:00"
+    warm: 1
+  template:
+    metadata:
+      labels:
+        team: platform
+        purpose: ci
+    spec:
+      foo: e2e

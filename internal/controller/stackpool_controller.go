@@ -122,6 +122,7 @@ func (r *StackPoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		// A new template deserves a fresh start.
 		pool.Status.ConsecutiveFailures, pool.Status.LastFailureTime = 0, nil
 	}
+	untilWarmChange := r.setDesiredWarm(ctx, &pool)
 
 	// Bindings interrupted half-way only need the claim to record its Stack.
 	// This is safe whatever the cache state, so it always runs.
@@ -147,7 +148,7 @@ func (r *StackPoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 
 	backoff := r.provisioningBackoff(&pool)
-	plan := planScaling(view, pool.Spec.Warm, pool.Spec.Max, backoff == 0 && !r.isDegraded(&pool))
+	plan := planScaling(view, pool.Status.DesiredWarm, pool.Spec.Max, backoff == 0 && !r.isDegraded(&pool))
 	if err := r.applyScaling(ctx, &pool, hash, view, plan); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -155,7 +156,51 @@ func (r *StackPoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	if err := r.updateStatus(ctx, base, &pool, hash, view); err != nil {
 		return ctrl.Result{}, err
 	}
-	return ctrl.Result{RequeueAfter: backoff}, nil
+	return ctrl.Result{RequeueAfter: soonest(backoff, untilWarmChange)}, nil
+}
+
+// setDesiredWarm records the warm target in force on the pool's status, and
+// returns how long until it changes, or zero if it never does.
+func (r *StackPoolReconciler) setDesiredWarm(ctx context.Context, pool *platformv1.StackPool) time.Duration {
+	log := logf.FromContext(ctx)
+	now := r.Clock.Now()
+
+	target, err := resolveWarm(&pool.Spec, now)
+	if err != nil {
+		// API validation rejects bad schedules, so the operator's time zone
+		// database must lack the pool's zone. Keep to spec.warm meanwhile.
+		log.Error(err, "Failed to evaluate warm schedules, falling back to spec.warm")
+		r.Recorder.Eventf(pool, nil, corev1.EventTypeWarning, "InvalidWarmSchedule", "Schedule",
+			"Ignoring warm schedules: %v", err)
+	}
+
+	status := &pool.Status
+	if target.schedule != status.ActiveWarmSchedule {
+		source := "spec.warm"
+		if target.schedule != "" {
+			source = "warm schedule " + target.schedule
+		}
+		log.Info("Changed warm target", "warm", target.warm, "schedule", target.schedule)
+		r.Recorder.Eventf(pool, nil, corev1.EventTypeNormal, "WarmTargetChanged", "Schedule",
+			"Keeping %d warm Stacks, as set by %s", target.warm, source)
+	}
+	status.DesiredWarm, status.ActiveWarmSchedule = target.warm, target.schedule
+
+	if target.until.IsZero() {
+		return 0
+	}
+	return target.until.Sub(now)
+}
+
+// soonest returns the shortest of the positive delays, or zero if none is.
+func soonest(delays ...time.Duration) time.Duration {
+	var d time.Duration
+	for _, delay := range delays {
+		if delay > 0 && (d == 0 || delay < d) {
+			d = delay
+		}
+	}
+	return d
 }
 
 // stacksOf lists the Stacks the pool controls.
@@ -394,9 +439,9 @@ func (r *StackPoolReconciler) updateStatus(ctx context.Context, base, pool *plat
 		Type:    platformv1.StackPoolConditionReady,
 		Status:  metav1.ConditionTrue,
 		Reason:  platformv1.StackPoolReasonWarm,
-		Message: fmt.Sprintf("%d of %d warm Stacks ready", len(view.ready), pool.Spec.Warm),
+		Message: fmt.Sprintf("%d of %d warm Stacks ready", len(view.ready), status.DesiredWarm),
 	}
-	if int32(len(view.ready)) < pool.Spec.Warm {
+	if int32(len(view.ready)) < status.DesiredWarm {
 		ready.Status, ready.Reason = metav1.ConditionFalse, platformv1.StackPoolReasonWarmingUp
 	}
 

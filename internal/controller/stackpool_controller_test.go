@@ -210,6 +210,52 @@ var _ = Describe("StackPool Controller", func() {
 		Expect(stacksOf(pool)).To(ConsistOf(HaveField("Name", oldest)))
 	})
 
+	It("follows its warm schedules, never touching claimed Stacks", func() {
+		friday := time.Date(2026, time.October, 23, 12, 0, 0, 0, time.UTC)
+		saturday := time.Date(2026, time.October, 24, 0, 0, 0, 0, time.UTC)
+		monday := time.Date(2026, time.October, 26, 0, 0, 0, 0, time.UTC)
+		h.clock.SetTime(friday)
+
+		pool := createPool(3, 5, func(p *platformv1.StackPool) {
+			p.Spec.WarmSchedules = []platformv1.WarmSchedule{{
+				Name: "weekend", Days: []platformv1.Weekday{platformv1.Saturday, platformv1.Sunday},
+				Start: "00:00", End: "24:00", Warm: 1,
+			}}
+		})
+		h.provision()
+		claim := createClaim(pool.Name+"-claim", pool.Name, 96*time.Hour)
+		h.provision()
+		claimed := get(claim.Name, claim).Status.StackName
+		Expect(unclaimed(stacksOf(pool))).To(HaveLen(3))
+
+		result, err := h.pools.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: pool.Name}})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result.RequeueAfter).To(Equal(saturday.Sub(h.clock.Now())), "the pool wakes up when the weekend starts")
+
+		h.clock.SetTime(saturday)
+		h.settle()
+
+		Expect(unclaimed(stacksOf(pool))).To(HaveLen(1))
+		Expect(exists(claimed, &platformv1.Stack{})).To(BeTrue())
+		get(pool.Name, pool)
+		Expect(pool.Status.DesiredWarm).To(BeEquivalentTo(1))
+		Expect(pool.Status.ActiveWarmSchedule).To(Equal("weekend"))
+		Expect(meta.IsStatusConditionTrue(pool.Status.Conditions, platformv1.StackPoolConditionReady)).To(BeTrue(),
+			"a pool at its scheduled target is ready")
+
+		result, err = h.pools.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: pool.Name}})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result.RequeueAfter).To(Equal(monday.Sub(saturday)), "the pool wakes up when the weekend ends")
+
+		h.clock.SetTime(monday)
+		h.provision()
+
+		Expect(unclaimed(stacksOf(pool))).To(HaveLen(3))
+		get(pool.Name, pool)
+		Expect(pool.Status.DesiredWarm).To(BeEquivalentTo(3))
+		Expect(pool.Status.ActiveWarmSchedule).To(BeEmpty())
+	})
+
 	It("deletes a Stack whose claim disappeared without releasing it", func() {
 		pool := createPool(1, 1)
 		h.provision()

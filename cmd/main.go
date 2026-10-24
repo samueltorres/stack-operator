@@ -22,6 +22,10 @@ import (
 	"os"
 	"time"
 
+	// Embed the time zone database: the distroless base image has none, and
+	// StackPool warm schedules are evaluated in IANA time zones.
+	_ "time/tzdata"
+
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"

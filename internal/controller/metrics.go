@@ -32,6 +32,11 @@ var (
 		Help: "Number of Stacks in a StackPool by state (provisioning, warm, claimed).",
 	}, []string{poolLabel, "state"})
 
+	poolDesiredWarm = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "stackpool_desired_warm",
+		Help: "Number of warm Stacks a StackPool currently aims for, after warm schedules.",
+	}, []string{poolLabel})
+
 	poolPendingClaims = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "stackpool_pending_claims",
 		Help: "Number of StackClaims waiting for a Stack from a StackPool.",
@@ -52,7 +57,7 @@ var (
 )
 
 func init() {
-	metrics.Registry.MustRegister(poolStacks, poolPendingClaims, poolConsecutiveFailures, claimWaitSeconds)
+	metrics.Registry.MustRegister(poolStacks, poolDesiredWarm, poolPendingClaims, poolConsecutiveFailures, claimWaitSeconds)
 }
 
 func recordPoolMetrics(pool *platformv1.StackPool) {
@@ -60,6 +65,7 @@ func recordPoolMetrics(pool *platformv1.StackPool) {
 	poolStacks.WithLabelValues(pool.Name, "provisioning").Set(float64(s.Provisioning))
 	poolStacks.WithLabelValues(pool.Name, "warm").Set(float64(s.Warm))
 	poolStacks.WithLabelValues(pool.Name, "claimed").Set(float64(s.Claimed))
+	poolDesiredWarm.WithLabelValues(pool.Name).Set(float64(s.DesiredWarm))
 	poolPendingClaims.WithLabelValues(pool.Name).Set(float64(s.PendingClaims))
 	poolConsecutiveFailures.WithLabelValues(pool.Name).Set(float64(s.ConsecutiveFailures))
 }
@@ -67,6 +73,7 @@ func recordPoolMetrics(pool *platformv1.StackPool) {
 func forgetPoolMetrics(poolName string) {
 	labels := prometheus.Labels{poolLabel: poolName}
 	poolStacks.DeletePartialMatch(labels)
+	poolDesiredWarm.DeletePartialMatch(labels)
 	poolPendingClaims.DeletePartialMatch(labels)
 	poolConsecutiveFailures.DeletePartialMatch(labels)
 	claimWaitSeconds.DeletePartialMatch(labels)
