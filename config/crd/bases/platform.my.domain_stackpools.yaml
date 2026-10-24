@@ -180,9 +180,9 @@ spec:
                   provisioning if the pool holds nothing warm.
                 items:
                   description: |-
-                    WarmSchedule sets the pool's warm target during a window that recurs on
-                    the given days, from start until end in the pool's timeZone. A window whose
-                    end is before its start runs past midnight into the next day.
+                    WarmSchedule sets the pool's warm target during a window that opens on the
+                    given days at start, in the pool's timeZone, and stays open for duration.
+                    A window may run past midnight into the following days.
                   properties:
                     days:
                       description: days the window starts on.
@@ -201,13 +201,18 @@ spec:
                       minItems: 1
                       type: array
                       x-kubernetes-list-type: set
-                    end:
-                      default: "24:00"
+                    duration:
+                      default: 24h
                       description: |-
-                        end is the time of day the window closes, as HH:MM. The window does not
-                        include end itself; "24:00" closes it at midnight.
-                      pattern: ^(([01][0-9]|2[0-3]):[0-5][0-9]|24:00)$
+                        duration is how long the window stays open, up to a week. It is measured
+                        on the wall clock, so a window from 20:00 lasting 12h closes at 08:00 even
+                        when daylight saving time changes overnight.
                       type: string
+                      x-kubernetes-validations:
+                      - message: duration must be positive
+                        rule: duration(self) > duration('0s')
+                      - message: duration must not exceed a week
+                        rule: duration(self) <= duration('168h')
                     name:
                       description: name identifies the schedule. status.activeWarmSchedule
                         reports it.
@@ -231,9 +236,6 @@ spec:
                   - name
                   - warm
                   type: object
-                  x-kubernetes-validations:
-                  - message: start and end must differ
-                    rule: self.start != self.end
                 maxItems: 16
                 type: array
                 x-kubernetes-list-map-keys:

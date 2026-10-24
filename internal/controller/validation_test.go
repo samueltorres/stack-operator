@@ -102,11 +102,16 @@ var _ = Describe("API validation", func() {
 		Entry("warm schedule above max", func(p *platformv1.StackPool) {
 			p.Spec.WarmSchedules = []platformv1.WarmSchedule{weekend(3)}
 		}, "warmSchedules[].warm must not exceed max"),
-		Entry("warm schedule that never opens", func(p *platformv1.StackPool) {
+		Entry("warm schedule with a negative duration", func(p *platformv1.StackPool) {
 			s := weekend(0)
-			s.Start, s.End = "08:00", "08:00"
+			s.Duration = metav1.Duration{Duration: -time.Hour}
 			p.Spec.WarmSchedules = []platformv1.WarmSchedule{s}
-		}, "start and end must differ"),
+		}, "duration must be positive"),
+		Entry("warm schedule longer than a week", func(p *platformv1.StackPool) {
+			s := weekend(0)
+			s.Duration = metav1.Duration{Duration: 169 * time.Hour}
+			p.Spec.WarmSchedules = []platformv1.WarmSchedule{s}
+		}, "duration must not exceed a week"),
 		Entry("warm schedule starting at 24:00", func(p *platformv1.StackPool) {
 			s := weekend(0)
 			s.Start = "24:00"
@@ -129,6 +134,6 @@ var _ = Describe("API validation", func() {
 		})
 		schedule := get(pool.Name, pool).Spec.WarmSchedules[0]
 		Expect(schedule.Start).To(Equal("00:00"))
-		Expect(schedule.End).To(Equal("24:00"))
+		Expect(schedule.Duration.Duration).To(Equal(24 * time.Hour))
 	})
 })

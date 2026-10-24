@@ -219,7 +219,7 @@ var _ = Describe("StackPool Controller", func() {
 		pool := createPool(3, 5, func(p *platformv1.StackPool) {
 			p.Spec.WarmSchedules = []platformv1.WarmSchedule{{
 				Name: "weekend", Days: []platformv1.Weekday{platformv1.Saturday, platformv1.Sunday},
-				Start: "00:00", End: "24:00", Warm: 1,
+				Start: "00:00", Duration: metav1.Duration{Duration: 24 * time.Hour}, Warm: 1,
 			}}
 		})
 		h.provision()

@@ -96,28 +96,24 @@ func targetAt(warm int32, windows []window, t time.Time) warmTarget {
 	return target
 }
 
-// occurrences returns the windows of a schedule that start between the day
-// before t and a week after it. A window lasts a day at most, so these cover
+// occurrences returns the windows of a schedule that start between a week
+// before t and a week after it. A window lasts a week at most, so these cover
 // every instant of the week starting at t.
 func occurrences(s *platformv1.WarmSchedule, t time.Time) ([]window, error) {
 	start, err := minuteOfDay(cmp.Or(s.Start, "00:00"))
 	if err != nil {
 		return nil, fmt.Errorf("warm schedule %s: %w", s.Name, err)
 	}
-	end, err := minuteOfDay(cmp.Or(s.End, "24:00"))
-	if err != nil {
-		return nil, fmt.Errorf("warm schedule %s: %w", s.Name, err)
-	}
-	overnight := 0
-	if end <= start {
-		overnight = 1
+	duration := cmp.Or(s.Duration.Duration, 24*time.Hour)
+	if duration <= 0 || duration > 7*24*time.Hour {
+		return nil, fmt.Errorf("warm schedule %s: duration %s is not between 0 and a week", s.Name, duration)
 	}
 
-	// time.Date normalizes the minutes on the wall clock, so windows keep
-	// their local times across daylight saving changes.
+	// time.Date normalizes the minutes and nanoseconds on the wall clock, so
+	// windows keep their local times across daylight saving changes.
 	year, month, day := t.Date()
 	var out []window
-	for offset := -1; offset <= 7; offset++ {
+	for offset := -7; offset <= 7; offset++ {
 		date := time.Date(year, month, day+offset, 0, 0, 0, 0, t.Location())
 		// time.Weekday names match the Weekday enum.
 		if !slices.Contains(s.Days, platformv1.Weekday(date.Weekday().String())) {
@@ -126,18 +122,14 @@ func occurrences(s *platformv1.WarmSchedule, t time.Time) ([]window, error) {
 		out = append(out, window{
 			schedule: s,
 			start:    time.Date(year, month, day+offset, 0, start, 0, 0, t.Location()),
-			end:      time.Date(year, month, day+offset+overnight, 0, end, 0, 0, t.Location()),
+			end:      time.Date(year, month, day+offset, 0, start, 0, int(duration), t.Location()),
 		})
 	}
 	return out, nil
 }
 
 // minuteOfDay parses an HH:MM time of day into minutes since midnight.
-// "24:00" is midnight at the end of the day.
 func minuteOfDay(s string) (int, error) {
-	if s == "24:00" {
-		return 24 * 60, nil
-	}
 	tod, err := time.Parse("15:04", s)
 	if err != nil {
 		return 0, fmt.Errorf("invalid time of day %q", s)

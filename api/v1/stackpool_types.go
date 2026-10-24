@@ -93,10 +93,9 @@ type StackPoolSpec struct {
 	Template StackTemplateSpec `json:"template"`
 }
 
-// WarmSchedule sets the pool's warm target during a window that recurs on
-// the given days, from start until end in the pool's timeZone. A window whose
-// end is before its start runs past midnight into the next day.
-// +kubebuilder:validation:XValidation:rule="self.start != self.end",message="start and end must differ"
+// WarmSchedule sets the pool's warm target during a window that opens on the
+// given days at start, in the pool's timeZone, and stays open for duration.
+// A window may run past midnight into the following days.
 type WarmSchedule struct {
 	// name identifies the schedule. status.activeWarmSchedule reports it.
 	// +required
@@ -118,12 +117,14 @@ type WarmSchedule struct {
 	// +kubebuilder:validation:Pattern=`^([01][0-9]|2[0-3]):[0-5][0-9]$`
 	Start string `json:"start,omitempty"`
 
-	// end is the time of day the window closes, as HH:MM. The window does not
-	// include end itself; "24:00" closes it at midnight.
+	// duration is how long the window stays open, up to a week. It is measured
+	// on the wall clock, so a window from 20:00 lasting 12h closes at 08:00 even
+	// when daylight saving time changes overnight.
 	// +optional
-	// +kubebuilder:default="24:00"
-	// +kubebuilder:validation:Pattern=`^(([01][0-9]|2[0-3]):[0-5][0-9]|24:00)$`
-	End string `json:"end,omitempty"`
+	// +kubebuilder:default="24h"
+	// +kubebuilder:validation:XValidation:rule="duration(self) > duration('0s')",message="duration must be positive"
+	// +kubebuilder:validation:XValidation:rule="duration(self) <= duration('168h')",message="duration must not exceed a week"
+	Duration metav1.Duration `json:"duration,omitzero"`
 
 	// warm is the number of warm Stacks the pool keeps while the window is open.
 	// +required

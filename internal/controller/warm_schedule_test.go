@@ -21,6 +21,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	platformv1 "github.com/samueltorres/stack-operator/api/v1"
 )
@@ -37,13 +38,22 @@ var _ = Describe("resolveWarm", func() {
 
 	weekend := platformv1.WarmSchedule{
 		Name: "weekend", Days: []platformv1.Weekday{platformv1.Saturday, platformv1.Sunday},
-		Start: "00:00", End: "24:00", Warm: 1,
+		Start: "00:00", Duration: metav1.Duration{Duration: 24 * time.Hour}, Warm: 1,
 	}
 	nights := platformv1.WarmSchedule{
 		Name: "nights", Days: []platformv1.Weekday{
 			platformv1.Monday, platformv1.Tuesday, platformv1.Wednesday, platformv1.Thursday, platformv1.Friday,
 		},
-		Start: "20:00", End: "07:00", Warm: 2,
+		Start: "20:00", Duration: metav1.Duration{Duration: 11 * time.Hour}, Warm: 2,
+	}
+	// From Friday evening until Monday morning, in one window.
+	offHours := platformv1.WarmSchedule{
+		Name: "off-hours", Days: []platformv1.Weekday{platformv1.Friday},
+		Start: "20:00", Duration: metav1.Duration{Duration: 59 * time.Hour}, Warm: 1,
+	}
+	saturdayNight := platformv1.WarmSchedule{
+		Name: "saturday-night", Days: []platformv1.Weekday{platformv1.Saturday},
+		Start: "20:00", Duration: metav1.Duration{Duration: 12 * time.Hour}, Warm: 0,
 	}
 	everyDay := platformv1.WarmSchedule{
 		Name: "always", Days: []platformv1.Weekday{
@@ -80,6 +90,12 @@ var _ = Describe("resolveWarm", func() {
 			spec("Europe/Lisbon", weekend), at(26, 0, 0), int32(5), "", at(31, 0, 0)),
 		Entry("an overnight window runs into the next day",
 			spec("Europe/Lisbon", nights), at(24, 3, 0), int32(2), "nights", at(24, 7, 0)),
+		Entry("a window may span several days",
+			spec("Europe/Lisbon", offHours), at(25, 12, 0), int32(1), "off-hours", at(26, 7, 0)),
+		Entry("a multi-day window opened in the previous week is still open",
+			spec("Europe/Lisbon", offHours), at(26, 6, 59), int32(1), "off-hours", at(26, 7, 0)),
+		Entry("duration is measured on the wall clock across daylight saving",
+			spec("Europe/Lisbon", saturdayNight), at(24, 21, 0), int32(0), "saturday-night", at(25, 8, 0)),
 		Entry("overlapping windows take the lowest warm",
 			spec("Europe/Lisbon", nights, weekend), at(24, 3, 0), int32(1), "weekend", at(26, 0, 0)),
 		Entry("the next window to open may be a higher one",
